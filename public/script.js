@@ -31,6 +31,7 @@ function initialState() {
     return {
         activePetId: pet.id,
         animals: [pet],
+        profile: { name: "Júlia", surname: "Martins", birthDate: "", photo: "" },
         records: [
             { id: createId(), petId: pet.id, type: "Peso e condição corporal", date: dateOffset(-140), weight: 18.1, bcs: "5", mcs: "Normal" },
             { id: createId(), petId: pet.id, type: "Peso e condição corporal", date: dateOffset(-100), weight: 18.2, bcs: "5", mcs: "Normal" },
@@ -50,6 +51,12 @@ function loadState() {
         if (saved && Array.isArray(saved.animals) && Array.isArray(saved.records)) {
             saved.animals = saved.animals.map(pet => ({ ...pet, size: pet.size || "" }));
             if (!saved.animals.some(pet => pet.id === saved.activePetId)) saved.activePetId = saved.animals[0]?.id || null;
+            saved.profile = {
+                name: saved.profile?.name || "Júlia",
+                surname: saved.profile?.surname || "Martins",
+                birthDate: saved.profile?.birthDate || "",
+                photo: saved.profile?.photo || ""
+            };
             return saved;
         }
     } catch (error) {
@@ -70,10 +77,14 @@ const recordDialog = byId("#modal-registro");
 const animalDialog = byId("#modal-animal");
 const animalDeleteDialog = byId("#modal-excluir-animal");
 const animalDeleteForm = byId("#form-excluir-animal");
+const userProfileDialog = byId("#modal-perfil-usuario");
+const userProfileForm = byId("#form-perfil-usuario");
 const recordType = byId("#tipo-registro");
 const historyFilter = byId("#filtro-historico");
 let animalPhoto = "";
 let animalPhotoPreviewUrl = "";
+let userPhoto = "";
+let userPhotoPreviewUrl = "";
 
 function saveState() {
     localStorage.setItem(storageKey, JSON.stringify(state));
@@ -463,6 +474,7 @@ function render() {
     const records = petRecords();
     renderPetSelector();
     renderPetDetails();
+    renderUserProfile();
     renderMetrics(records);
     renderWeightChart(records);
     renderNextCare(records);
@@ -471,6 +483,72 @@ function render() {
     const filter = historyFilter.value;
     const filtered = filter === "todos" ? records : records.filter(record => record.type === filter);
     renderRecordList(byId("#lista-historico"), filtered, "Nenhum registro encontrado nessa categoria.");
+}
+
+function renderUserProfile() {
+    const profile = state.profile;
+    const fullName = [profile.name, profile.surname].filter(Boolean).join(" ");
+    byId("#tutora-nome").textContent = fullName || "Tutora";
+    byId("#tutora-iniciais").textContent = (profile.name || "T").trim().charAt(0).toLocaleUpperCase("pt-BR");
+    const image = byId("#tutora-foto");
+    if (profile.photo) {
+        image.src = profile.photo;
+        image.alt = `Foto de ${fullName}`;
+        image.hidden = false;
+        byId("#tutora-iniciais").hidden = true;
+    } else {
+        image.removeAttribute("src");
+        image.alt = "";
+        image.hidden = true;
+        byId("#tutora-iniciais").hidden = false;
+    }
+}
+
+function openUserProfileDialog() {
+    userProfileForm.reset();
+    userProfileForm.elements.name.value = state.profile.name;
+    userProfileForm.elements.surname.value = state.profile.surname;
+    userProfileForm.elements.birthDate.value = state.profile.birthDate;
+    userPhoto = state.profile.photo;
+    setUserPhotoPreview(userPhoto);
+    byId("#remover-foto-tutora-wrap").hidden = !userPhoto;
+    byId("#mensagem-foto-tutora").textContent = "";
+    userProfileDialog.showModal();
+}
+
+function setUserPhotoPreview(source, isTemporary = false) {
+    if (userPhotoPreviewUrl) URL.revokeObjectURL(userPhotoPreviewUrl);
+    userPhotoPreviewUrl = isTemporary ? source : "";
+    const preview = byId("#previa-foto-tutora");
+    preview.hidden = !source;
+    if (source) preview.src = source;
+    else preview.removeAttribute("src");
+    byId("#sem-foto-tutora").hidden = Boolean(source);
+}
+
+async function saveUserProfile(event) {
+    event.preventDefault();
+    const data = new FormData(userProfileForm);
+    const photoFile = data.get("photoFile");
+    let photo = data.get("removePhoto") === "on" ? "" : userPhoto;
+    byId("#mensagem-foto-tutora").textContent = "";
+    if (photoFile instanceof File && photoFile.size > 0) {
+        try {
+            photo = await encodePetPhoto(photoFile);
+        } catch (error) {
+            byId("#mensagem-foto-tutora").textContent = error.message;
+            return;
+        }
+    }
+    state.profile = {
+        name: String(data.get("name") || "").trim(),
+        surname: String(data.get("surname") || "").trim(),
+        birthDate: String(data.get("birthDate") || ""),
+        photo
+    };
+    saveState();
+    renderUserProfile();
+    userProfileDialog.close();
 }
 
 function showView(name) {
@@ -898,6 +976,7 @@ byId("#btn-editar-pet").addEventListener("click", () => openAnimalDialog(activeP
 byId("#btn-editar-perfil").addEventListener("click", () => openAnimalDialog(activePet()));
 byId("#btn-excluir-pet").addEventListener("click", () => openAnimalDeleteDialog());
 byId("#btn-excluir-perfil").addEventListener("click", () => openAnimalDeleteDialog());
+byId("#btn-editar-usuario").addEventListener("click", openUserProfileDialog);
 byId("#btn-exportar").addEventListener("click", exportData);
 byId("#mes-anterior").addEventListener("click", () => {
     calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
@@ -930,6 +1009,19 @@ byId("#remover-foto-wrap").querySelector("input").addEventListener("change", eve
     setAnimalPhotoPreview(event.target.checked ? "" : animalPhoto);
 });
 animalDialog.addEventListener("close", () => setAnimalPhotoPreview(animalPhoto));
+userProfileForm.addEventListener("submit", saveUserProfile);
+byId("#foto-tutora").addEventListener("change", event => {
+    const file = event.target.files[0];
+    if (!file) return;
+    byId("#remover-foto-tutora-wrap").querySelector("input").checked = false;
+    setUserPhotoPreview(URL.createObjectURL(file), true);
+    byId("#remover-foto-tutora-wrap").hidden = !userPhoto;
+    byId("#mensagem-foto-tutora").textContent = "";
+});
+byId("#remover-foto-tutora-wrap").querySelector("input").addEventListener("change", event => {
+    setUserPhotoPreview(event.target.checked ? "" : userPhoto);
+});
+userProfileDialog.addEventListener("close", () => setUserPhotoPreview(state.profile.photo));
 animalDeleteForm.addEventListener("submit", deleteAnimal);
 byId("#confirmacao-exclusao-animal").addEventListener("input", event => {
     const confirmed = event.target.value === petDeleteConfirmation;

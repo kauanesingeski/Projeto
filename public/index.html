@@ -16,7 +16,7 @@
 <body>
     <div class="app-shell">
         <aside class="sidebar">
-            <a class="brand" href="#inicio" aria-label="Augenda, início"><img src="/logo/logo.png" alt="Augenda"></a>
+            <a class="brand" href="#inicio" aria-label="Augenda, início"><img src="/logo.png" alt="Augenda"></a>
             <p class="nav-caption">MENU</p>
             <nav class="main-nav" aria-label="Navegação principal">
                 <button class="nav-link active" type="button" data-view="overview"><span class="nav-icon">◫</span> Visão geral</button>
@@ -24,7 +24,7 @@
                 <button class="nav-link" type="button" data-view="history"><span class="nav-icon">↻</span> Histórico</button>
                 <button class="nav-link" type="button" data-view="profile"><span class="nav-icon">♡</span> Meu pet</button>
             </nav>
-            <div class="sidebar-bottom"><div class="privacy-note"><span>●</span><span>Seus registros ficam salvos neste dispositivo.</span></div><div class="user-chip"><span class="user-avatar">J</span><span><strong>Júlia Martins</strong><small>Tutora</small></span><span class="user-more">···</span></div></div>
+            <div class="sidebar-bottom"><div class="privacy-note"><span>●</span><span>Seus registros ficam salvos neste dispositivo.</span></div><button class="user-chip" id="btn-editar-usuario" type="button" aria-label="Editar perfil da tutora"><span class="user-avatar"><span id="tutora-iniciais">J</span><img id="tutora-foto" alt="" hidden></span><span class="user-details"><strong id="tutora-nome">Júlia Martins</strong><small>Tutora</small></span><span class="user-more" aria-hidden="true">✎</span></button></div>
         </aside>
 
         <main class="workspace" id="inicio">
@@ -108,6 +108,21 @@
         <input id="confirmacao-exclusao-animal" name="confirmation" required autocomplete="off">
         <p class="form-feedback" id="mensagem-excluir-animal" role="status"></p>
         <div class="modal-actions"><button class="button button-outline" type="button" data-fechar="modal-excluir-animal">Cancelar</button><button class="button button-primary" id="confirmar-exclusao-animal" type="submit" disabled>Excluir pet</button></div>
+    </form></dialog>
+
+    <dialog id="modal-perfil-usuario" class="modal"><form id="form-perfil-usuario" class="modal-form">
+        <div class="modal-heading"><div><p class="eyebrow">PERFIL DA TUTORA</p><h2>Editar perfil</h2></div><button class="icon-button" type="button" data-fechar="modal-perfil-usuario" aria-label="Fechar">×</button></div>
+        <label class="field-label" for="tutora-primeiro-nome">Nome</label><input id="tutora-primeiro-nome" name="name" required maxlength="60" autocomplete="given-name">
+        <label class="field-label" for="tutora-sobrenome">Sobrenome</label><input id="tutora-sobrenome" name="surname" required maxlength="80" autocomplete="family-name">
+        <label class="field-label" for="tutora-nascimento">Data de nascimento</label><input id="tutora-nascimento" name="birthDate" type="date" autocomplete="bday">
+        <div class="photo-upload">
+            <label class="field-label" for="foto-tutora">Foto do perfil <span>(opcional)</span></label>
+            <input id="foto-tutora" name="photoFile" type="file" accept="image/*">
+            <div class="photo-preview-wrap"><img id="previa-foto-tutora" alt="Prévia da foto do perfil" hidden><span id="sem-foto-tutora">Nenhuma foto selecionada</span></div>
+            <label class="photo-remove" id="remover-foto-tutora-wrap" hidden><input name="removePhoto" type="checkbox"> Remover foto atual</label>
+            <p class="form-feedback" id="mensagem-foto-tutora" role="status"></p>
+        </div>
+        <div class="modal-actions"><button class="button button-outline" type="button" data-fechar="modal-perfil-usuario">Cancelar</button><button class="button button-primary" type="submit">Salvar perfil</button></div>
     </form></dialog>
 </body>
 </html>

@@ -17,7 +17,6 @@ const pool = new Pool({
 
 app.use(express.json());
 app.use(express.static("public"));
-app.use("/logo", express.static(path.join(__dirname, "logo")));
 app.use("/vendor/jspdf", express.static(path.join(__dirname, "node_modules", "jspdf", "dist")));
 
 // Listar animais
