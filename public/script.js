@@ -774,7 +774,7 @@ function exportPdf(pet, records) {
     pdf.setTextColor(...cream);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(19);
-    pdf.text("Compasso Pet", margin, 15);
+    pdf.text("Augenda", margin, 15);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
     pdf.text("Relatório de saúde e cuidados", margin, 23);
@@ -844,7 +844,7 @@ function exportPdf(pet, records) {
         pdf.line(margin, 286, pageWidth - margin, 286);
         pdf.setTextColor(...slate);
         pdf.setFontSize(8);
-        pdf.text("Compasso Pet  |  Registro para acompanhamento profissional", margin, 291);
+        pdf.text("Augenda  |  Registro para acompanhamento profissional", margin, 291);
         pdf.text(`${page} / ${pageCount}`, pageWidth - margin, 291, { align: "right" });
     }
 
