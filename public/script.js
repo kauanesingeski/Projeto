@@ -1271,7 +1271,7 @@ window.addEventListener("beforeunload", event => {
 });
 
 if (!window.db) {
-    showLoading("Não foi possível iniciar a conexão com o banco de dados. Verifique SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no arquivo .env e reinicie o servidor.", true);
+    showLoading(window.dbErro || "Não foi possível iniciar a conexão com o banco de dados. Verifique SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no arquivo .env e reinicie o servidor.", true);
 } else {
     db.aoMudarSessao((event, session) => {
         if (event === "PASSWORD_RECOVERY") {
