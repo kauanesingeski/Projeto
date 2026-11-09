@@ -8,64 +8,34 @@ function localDate(date = new Date()) {
     return `${year}-${month}-${day}`;
 }
 
-function dateOffset(days) {
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    return localDate(date);
-}
-
 function createId() {
     return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function initialState() {
-    const pet = {
-        id: createId(),
-        name: "Luna",
-        species: "Cão",
-        breed: "Golden retriever",
-        birthDate: dateOffset(-4 * 365 - 1),
-        size: "Grande",
-        sex: "Fêmea"
-    };
+function emptyState() {
     return {
-        activePetId: pet.id,
-        animals: [pet],
-        profile: { name: "Júlia", surname: "Martins", birthDate: "", photo: "" },
-        records: [
-            { id: createId(), petId: pet.id, type: "Peso e condição corporal", date: dateOffset(-140), weight: 18.1, bcs: "5", mcs: "Normal" },
-            { id: createId(), petId: pet.id, type: "Peso e condição corporal", date: dateOffset(-100), weight: 18.2, bcs: "5", mcs: "Normal" },
-            { id: createId(), petId: pet.id, type: "Peso e condição corporal", date: dateOffset(-60), weight: 18.2, bcs: "5", mcs: "Normal" },
-            { id: createId(), petId: pet.id, type: "Peso e condição corporal", date: dateOffset(-20), weight: 18.4, bcs: "5", mcs: "Normal" },
-            { id: createId(), petId: pet.id, type: "Alimentação", date: dateOffset(-1), description: "Ração para adulto · 240 g por dia" },
-            { id: createId(), petId: pet.id, type: "Atividade física", date: localDate(), duration: 35, description: "Passeio no parque" },
-            { id: createId(), petId: pet.id, type: "Consulta", date: dateOffset(-76), description: "Check-up anual · Dra. Marina" },
-            { id: createId(), petId: pet.id, type: "Vacinação", date: dateOffset(-347), nextDate: dateOffset(18), description: "Antirrábica · reforço anual" }
-        ]
+        activePetId: null,
+        animals: [],
+        profile: { name: "", surname: "", birthDate: "", photo: "" },
+        records: []
     };
 }
 
-function loadState() {
+// Dados da versão antiga, que guardava tudo só neste navegador (usados na importação para a conta)
+function readLegacyState() {
     try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
-        if (saved && Array.isArray(saved.animals) && Array.isArray(saved.records)) {
-            saved.animals = saved.animals.map(pet => ({ ...pet, size: pet.size || "" }));
-            if (!saved.animals.some(pet => pet.id === saved.activePetId)) saved.activePetId = saved.animals[0]?.id || null;
-            saved.profile = {
-                name: saved.profile?.name || "Júlia",
-                surname: saved.profile?.surname || "Martins",
-                birthDate: saved.profile?.birthDate || "",
-                photo: saved.profile?.photo || ""
-            };
+        if (saved && Array.isArray(saved.animals) && Array.isArray(saved.records) && saved.animals.length) {
             return saved;
         }
     } catch (error) {
-        console.warn("Não foi possível carregar os dados salvos.", error);
+        console.warn("Não foi possível ler os dados salvos neste dispositivo.", error);
     }
-    return initialState();
+    return null;
 }
 
-let state = loadState();
+let state = emptyState();
+let currentUserId = null;
 const today = localDate();
 let calendarMonth = new Date();
 calendarMonth.setDate(1);
@@ -86,8 +56,67 @@ let animalPhotoPreviewUrl = "";
 let userPhoto = "";
 let userPhotoPreviewUrl = "";
 
+const activePetKey = () => `augenda-pet-ativo-${currentUserId}`;
+
+// Os dados ficam no Supabase; aqui guardamos só qual pet estava selecionado neste navegador.
 function saveState() {
-    localStorage.setItem(storageKey, JSON.stringify(state));
+    try {
+        if (currentUserId && state.activePetId) localStorage.setItem(activePetKey(), state.activePetId);
+    } catch {
+        // Armazenamento local indisponível (ex.: modo privado): não afeta os dados da conta.
+    }
+}
+
+function restoreActivePet() {
+    let saved = null;
+    try {
+        saved = localStorage.getItem(activePetKey());
+    } catch {
+        saved = null;
+    }
+    state.activePetId = state.animals.some(pet => pet.id === saved) ? saved : state.animals[0]?.id || null;
+}
+
+let toastTimer = 0;
+function showToast(message, duration = 6000) {
+    const toast = byId("#aviso-sincronizacao");
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, duration);
+}
+
+function updateSyncStatus(pending = 0) {
+    const note = byId("#status-sincronizacao");
+    const offline = !navigator.onLine;
+    note.classList.toggle("is-offline", offline);
+    note.classList.toggle("is-saving", !offline && pending > 0);
+    byId("#status-sincronizacao-texto").textContent = offline
+        ? "Sem internet. As alterações serão enviadas quando a conexão voltar."
+        : pending > 0 ? "Salvando alterações…" : "Sincronizado com sua conta.";
+}
+
+// A tela já foi atualizada; esta função envia a mudança ao Supabase em segundo plano.
+// Se falhar, avisa e recarrega os dados do servidor para a tela não mostrar algo que não foi salvo.
+function persist(task, failureMessage = "Não foi possível salvar a alteração.") {
+    return db.executar(task).catch(async error => {
+        console.error(failureMessage, error);
+        showToast(db.ehErroDeRede(error)
+            ? `${failureMessage} Verifique sua internet e tente de novo.`
+            : `${failureMessage} ${error.message || ""}`.trim());
+        await reloadFromServer();
+    });
+}
+
+async function reloadFromServer() {
+    try {
+        const data = await db.executar(() => db.carregar());
+        state = { ...data, activePetId: state.activePetId };
+        if (!state.animals.some(pet => pet.id === state.activePetId)) restoreActivePet();
+        render();
+    } catch (error) {
+        console.error("Não foi possível recarregar os dados.", error);
+    }
 }
 
 function activePet() {
@@ -546,9 +575,10 @@ async function saveUserProfile(event) {
         birthDate: String(data.get("birthDate") || ""),
         photo
     };
-    saveState();
     renderUserProfile();
     userProfileDialog.close();
+    const savedProfile = state.profile;
+    persist(() => db.salvarPerfil(savedProfile), "Não foi possível salvar o perfil.");
 }
 
 function showView(name) {
@@ -693,8 +723,8 @@ function openAnimalDeleteDialog(pet = activePet()) {
 function deleteRecord(id) {
     if (!window.confirm("Tem certeza que deseja deletar este cadastro?")) return;
     state.records = state.records.filter(record => record.id !== id);
-    saveState();
     render();
+    persist(() => db.excluirRegistro(id), "Não foi possível excluir o cadastro.");
 }
 
 function deleteReminder(id) {
@@ -702,8 +732,9 @@ function deleteReminder(id) {
     state.records = state.records.map(record => record.id === id
         ? { ...record, nextDate: "" }
         : record);
-    saveState();
     render();
+    const updated = state.records.find(record => record.id === id);
+    if (updated) persist(() => db.salvarRegistro(updated), "Não foi possível excluir o lembrete.");
 }
 
 function saveRecord(event) {
@@ -762,9 +793,9 @@ function saveRecord(event) {
     } else {
         state.records.push(updatedRecord);
     }
-    saveState();
     render();
     recordDialog.close();
+    persist(() => db.salvarRegistro(updatedRecord), "Não foi possível salvar o registro.");
 }
 
 async function saveAnimal(event) {
@@ -803,6 +834,7 @@ async function saveAnimal(event) {
     animalDialog.close();
     setAnimalPhotoPreview("");
     animalPhoto = "";
+    persist(() => db.salvarAnimal(pet), "Não foi possível salvar o pet.");
 }
 
 function deleteAnimal(event) {
@@ -820,6 +852,7 @@ function deleteAnimal(event) {
     saveState();
     render();
     animalDeleteDialog.close();
+    persist(() => db.excluirAnimal(petId), "Não foi possível excluir o pet.");
 }
 
 function csvValue(value) {
@@ -931,7 +964,24 @@ function exportPdf(pet, records) {
     pdf.save(`${fileName}-cuidados.pdf`);
 }
 
-function exportData() {
+// O jsPDF (~360 KB) só é baixado quando alguém exporta um PDF, deixando a abertura do site mais leve.
+let jsPdfLoading = null;
+function loadJsPdf() {
+    if (window.jspdf?.jsPDF) return Promise.resolve();
+    jsPdfLoading ||= new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "/vendor/jspdf/jspdf.umd.min.js";
+        script.onload = resolve;
+        script.onerror = () => {
+            jsPdfLoading = null;
+            reject(new Error("Falha ao baixar o gerador de PDF."));
+        };
+        document.head.append(script);
+    });
+    return jsPdfLoading;
+}
+
+async function exportData() {
     const pet = activePet();
     if (!pet) {
         alert("Adicione um pet antes de exportar os dados.");
@@ -941,7 +991,17 @@ function exportData() {
     const format = byId("#formato-exportacao").value;
 
     if (format === "pdf") {
-        exportPdf(pet, records);
+        const button = byId("#btn-exportar");
+        button.disabled = true;
+        try {
+            await loadJsPdf();
+            exportPdf(pet, records);
+        } catch (error) {
+            console.error(error);
+            alert("Não foi possível preparar o PDF. Verifique sua internet e tente novamente.");
+        } finally {
+            button.disabled = false;
+        }
         return;
     }
 
@@ -1040,5 +1100,195 @@ byId("#data-hoje").textContent = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long", day: "numeric", month: "long", year: "numeric"
 }).format(new Date()).toLocaleUpperCase("pt-BR");
 
-render();
-saveState();
+// ---------- Conta, login e carregamento ----------
+
+const authScreen = byId("#tela-login");
+const appShell = document.querySelector(".app-shell");
+const loginForm = byId("#form-login");
+let authMode = "entrar";
+let currentUser = null;
+let recoveringPassword = false;
+let pendingWrites = 0;
+
+const authTexts = {
+    entrar: ["Entrar", "Acesse os registros de saúde dos seus pets em qualquer dispositivo.", "Entrar", "Ainda não tem conta? Criar conta"],
+    cadastrar: ["Criar conta", "Seus registros ficam guardados com segurança na sua conta.", "Criar conta", "Já tem conta? Entrar"],
+    recuperar: ["Recuperar senha", "Enviaremos um link para você criar uma nova senha.", "Enviar link", "Voltar para Entrar"],
+    "nova-senha": ["Nova senha", "Digite a nova senha da sua conta.", "Salvar nova senha", ""]
+};
+
+function setLoginFeedback(message, success = false) {
+    const feedback = byId("#mensagem-login");
+    feedback.textContent = message;
+    feedback.classList.toggle("is-success", success);
+}
+
+function setAuthMode(mode) {
+    authMode = mode;
+    const [title, subtitle, submit, toggle] = authTexts[mode];
+    byId("#titulo-login").textContent = title;
+    byId("#subtitulo-login").textContent = subtitle;
+    byId("#btn-login").textContent = submit;
+    byId("#btn-alternar-cadastro").textContent = toggle;
+    byId("#campo-email").hidden = mode === "nova-senha";
+    byId("#campo-senha").hidden = mode === "recuperar";
+    byId("#login-senha").autocomplete = mode === "entrar" ? "current-password" : "new-password";
+    byId("#btn-esqueci-senha").hidden = mode !== "entrar";
+    byId("#links-login").hidden = mode === "nova-senha";
+    setLoginFeedback("");
+}
+
+function showLoading(message, canRetry = false) {
+    authScreen.hidden = false;
+    appShell.hidden = true;
+    loginForm.hidden = true;
+    byId("#auth-carregando").hidden = false;
+    byId("#auth-carregando-texto").textContent = message;
+    byId("#btn-tentar-novamente").hidden = !canRetry;
+    document.querySelector(".auth-spinner").hidden = canRetry;
+}
+
+function showLogin(mode = "entrar") {
+    authScreen.hidden = false;
+    appShell.hidden = true;
+    byId("#auth-carregando").hidden = true;
+    loginForm.hidden = false;
+    setAuthMode(mode);
+    (mode === "nova-senha" ? byId("#login-senha") : byId("#login-email")).focus();
+}
+
+function loadErrorMessage(error) {
+    if (db.ehErroDeRede(error)) return "Sem conexão com o servidor. Verifique sua internet e tente novamente.";
+    if (/schema cache|does not exist|relation/i.test(error?.message || "")) {
+        return "O banco de dados ainda não foi configurado. Execute o arquivo supabase/migrations/001_inicial.sql no SQL Editor do Supabase.";
+    }
+    return `Não foi possível carregar seus dados. ${error?.message || ""}`.trim();
+}
+
+async function offerLegacyImport() {
+    const legacy = readLegacyState();
+    if (!legacy || state.animals.length) return;
+    const count = legacy.animals.length;
+    const accepted = window.confirm(`Encontramos ${count} ${count === 1 ? "pet salvo" : "pets salvos"} neste navegador (versão anterior do app). Deseja enviar esses dados para a sua conta?`);
+    if (!accepted) return;
+    showLoading("Enviando seus dados para a conta…");
+    await db.executar(() => db.importarDadosLocais(legacy));
+    try {
+        localStorage.setItem(`${storageKey}-importado`, localStorage.getItem(storageKey));
+        localStorage.removeItem(storageKey);
+    } catch {
+        // Sem acesso ao armazenamento local: a importação já foi feita.
+    }
+    state = { ...(await db.carregar()), activePetId: null };
+    showToast("Pronto! Seus dados agora estão salvos na sua conta.");
+}
+
+async function startSession(user) {
+    currentUser = user;
+    currentUserId = user.id;
+    showLoading("Carregando seus dados…");
+    try {
+        state = { ...(await db.carregar()), activePetId: null };
+        await offerLegacyImport();
+        restoreActivePet();
+        authScreen.hidden = true;
+        appShell.hidden = false;
+        render();
+        updateSyncStatus(pendingWrites);
+    } catch (error) {
+        console.error("Falha ao carregar os dados da conta.", error);
+        showLoading(loadErrorMessage(error), true);
+    }
+}
+
+async function handleLoginSubmit(event) {
+    event.preventDefault();
+    const email = loginForm.elements.email.value.trim();
+    const password = loginForm.elements.password.value;
+    if (authMode !== "nova-senha" && !/^\S+@\S+\.\S+$/.test(email)) {
+        setLoginFeedback("Informe um e-mail válido.");
+        return;
+    }
+    if (authMode !== "recuperar" && password.length < 6) {
+        setLoginFeedback("A senha precisa ter pelo menos 6 caracteres.");
+        return;
+    }
+
+    const submit = byId("#btn-login");
+    submit.disabled = true;
+    setLoginFeedback("");
+    try {
+        if (authMode === "entrar") {
+            await db.entrar(email, password);
+        } else if (authMode === "cadastrar") {
+            const { precisaConfirmar } = await db.cadastrar(email, password);
+            if (precisaConfirmar) {
+                setAuthMode("entrar");
+                setLoginFeedback(`Conta criada! Enviamos um link de confirmação para ${email}. Depois de confirmar, entre aqui.`, true);
+            }
+        } else if (authMode === "recuperar") {
+            await db.recuperarSenha(email);
+            setLoginFeedback("Se houver uma conta com esse e-mail, você receberá um link para criar uma nova senha.", true);
+        } else {
+            await db.atualizarSenha(password);
+            recoveringPassword = false;
+            loginForm.reset();
+            showToast("Senha alterada com sucesso.");
+            if (currentUser) await startSession(currentUser);
+        }
+    } catch (error) {
+        setLoginFeedback(error.message);
+    } finally {
+        submit.disabled = false;
+    }
+}
+
+loginForm.addEventListener("submit", handleLoginSubmit);
+byId("#btn-alternar-cadastro").addEventListener("click", () => {
+    setAuthMode(authMode === "entrar" ? "cadastrar" : "entrar");
+});
+byId("#btn-esqueci-senha").addEventListener("click", () => setAuthMode("recuperar"));
+byId("#btn-tentar-novamente").addEventListener("click", () => {
+    if (currentUser) startSession(currentUser);
+    else window.location.reload();
+});
+byId("#btn-sair").addEventListener("click", async () => {
+    if (pendingWrites > 0 && !window.confirm("Ainda há alterações sendo salvas. Sair mesmo assim?")) return;
+    await db.sair();
+});
+
+window.addEventListener("db:status", event => {
+    pendingWrites = event.detail.pendentes;
+    updateSyncStatus(pendingWrites);
+});
+window.addEventListener("online", () => {
+    updateSyncStatus(pendingWrites);
+    if (currentUserId) reloadFromServer();
+});
+window.addEventListener("offline", () => updateSyncStatus(pendingWrites));
+window.addEventListener("beforeunload", event => {
+    if (pendingWrites > 0) event.preventDefault();
+});
+
+if (!window.db) {
+    showLoading("Não foi possível iniciar a conexão com o banco de dados. Verifique SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no arquivo .env e reinicie o servidor.", true);
+} else {
+    db.aoMudarSessao((event, session) => {
+        if (event === "PASSWORD_RECOVERY") {
+            recoveringPassword = true;
+            currentUser = session?.user || null;
+            showLogin("nova-senha");
+            return;
+        }
+        if (!session) {
+            currentUser = null;
+            currentUserId = null;
+            state = emptyState();
+            showLogin();
+            return;
+        }
+        if (recoveringPassword) return;
+        // TOKEN_REFRESHED e eventos parecidos chegam com o mesmo usuário: não recarregar à toa.
+        if (session.user.id !== currentUserId) startSession(session.user);
+    });
+}
