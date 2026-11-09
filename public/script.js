@@ -870,8 +870,9 @@ function exportPdf(pet, records) {
     const pageWidth = 210;
     const margin = 16;
     const contentWidth = pageWidth - margin * 2;
-    const navy = [39, 49, 66];
-    const slate = [85, 98, 112];
+    // Mesmos tons de marrom do app (--text #514343 e --primary #7f6363)
+    const navy = [81, 67, 67];
+    const slate = [127, 99, 99];
     const cream = [247, 239, 216];
     const sage = [200, 200, 169];
     const clay = [228, 166, 145];
