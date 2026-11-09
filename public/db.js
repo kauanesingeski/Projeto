@@ -5,6 +5,14 @@
     const config = window.AUGENDA_CONFIG || {};
     if (!window.supabase?.createClient || !config.supabaseUrl || !config.supabaseKey) {
         window.db = null;
+        if (location.protocol === "file:" || !window.AUGENDA_CONFIG) {
+            window.dbErro = "O site precisa ser aberto pelo servidor do projeto. Rode \"npm start\" na pasta do projeto e acesse http://localhost:3000 (não abra o index.html direto nem use o Live Server).";
+        } else if (!window.supabase?.createClient) {
+            window.dbErro = "A biblioteca do Supabase não carregou. Rode \"npm install\" na pasta do projeto e reinicie o servidor.";
+        } else {
+            window.dbErro = "SUPABASE_URL ou SUPABASE_PUBLISHABLE_KEY está vazio. Preencha o arquivo .env e reinicie o servidor.";
+        }
+        console.error("[Augenda]", window.dbErro);
         return;
     }
 

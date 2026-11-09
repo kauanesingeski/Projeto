@@ -869,53 +869,83 @@ function exportPdf(pet, records) {
     const pdf = new PdfDocument({ unit: "mm", format: "a4" });
     const pageWidth = 210;
     const margin = 16;
+    const padding = 5;
     const contentWidth = pageWidth - margin * 2;
-    const navy = [39, 49, 66];
-    const slate = [85, 98, 112];
-    const cream = [247, 239, 216];
-    const sage = [200, 200, 169];
-    const clay = [228, 166, 145];
+    const textWidth = contentWidth - padding * 2;
+    // Paleta do app (mesmas variáveis do style.css)
+    const primary = [127, 99, 99];     // --primary #7f6363
+    const text = [81, 67, 67];         // --text #514343
+    const accent = [161, 140, 121];    // --accent #a18c79
+    const secondary = [209, 184, 168]; // --secondary #d1b8a8
+    const surface = [232, 220, 213];   // --surface #e8dcd5
+    const background = [245, 240, 235]; // --background #f5f0eb
     const exportDate = formatDate(today, { day: "numeric", month: "long", year: "numeric" });
 
     pdf.setProperties({ title: `Cuidados de ${pet.name}`, subject: "Histórico de saúde do animal" });
-    pdf.setFillColor(...navy);
-    pdf.rect(0, 0, pageWidth, 37, "F");
-    pdf.setFillColor(...clay);
-    pdf.rect(0, 37, pageWidth, 1.5, "F");
-    pdf.setTextColor(...cream);
+
+    // Cabeçalho
+    pdf.setFillColor(...primary);
+    pdf.rect(0, 0, pageWidth, 39, "F");
+    pdf.setFillColor(...accent);
+    pdf.rect(0, 39, pageWidth, 1.6, "F");
+    pdf.setTextColor(255, 255, 255);
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(19);
+    pdf.setFontSize(20);
     pdf.text("Augenda", margin, 15);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
     pdf.text("Relatório de saúde e cuidados", margin, 23);
-    pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(9);
     pdf.text(`Exportado em ${exportDate}`, margin, 31);
 
-    pdf.setFillColor(...cream);
-    pdf.roundedRect(margin, 47, contentWidth, 26, 2, 2, "F");
-    pdf.setTextColor(...navy);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(14);
-    pdf.text(pet.name, margin + 5, 57);
-    pdf.setFont("helvetica", "normal");
-    pdf.setTextColor(...slate);
-    pdf.setFontSize(9);
-    const profile = [pet.species, pet.breed, pet.size ? `Porte ${pet.size.toLocaleLowerCase("pt-BR")}` : "", pet.sex]
-        .filter(Boolean).join("  |  ");
-    pdf.text(pdf.splitTextToSize(profile || "Perfil sem detalhes adicionais", contentWidth - 10), margin + 5, 65);
+    let cursorY = 47;
 
-    let cursorY = 84;
-    pdf.setTextColor(...navy);
+    // Cartão da tutora
+    const tutorName = [state.profile.name, state.profile.surname].filter(Boolean).join(" ");
+    if (tutorName) {
+        pdf.setFillColor(...surface);
+        pdf.roundedRect(margin, cursorY, contentWidth, 17, 2, 2, "F");
+        pdf.setTextColor(...text);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8);
+        pdf.text("TUTORA", margin + padding, cursorY + 6);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(10);
+        pdf.text(tutorName, margin + padding, cursorY + 12);
+        cursorY += 17 + 6;
+    }
+
+    // Cartão do pet: nome, características e idade
+    const petInfo = [pet.species, pet.breed, pet.size ? `Porte ${pet.size.toLocaleLowerCase("pt-BR")}` : "", pet.sex]
+        .filter(Boolean).join("  |  ");
+    pdf.setFontSize(9);
+    const infoLines = pdf.splitTextToSize(petInfo || "Perfil sem detalhes adicionais", textWidth);
+    const petCardHeight = 30 + infoLines.length * 4.5;
+    pdf.setFillColor(...background);
+    pdf.roundedRect(margin, cursorY, contentWidth, petCardHeight, 2, 2, "F");
+    pdf.setTextColor(...primary);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(15);
+    pdf.text(pet.name, margin + padding, cursorY + 9);
+    pdf.setTextColor(...text);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.text(infoLines, margin + padding, cursorY + 16);
+    pdf.setTextColor(...primary);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`Idade: ${pet.birthDate ? formatAge(pet.birthDate) : "não informada"}`, margin + padding, cursorY + petCardHeight - 7);
+    cursorY += petCardHeight + 11;
+
+    // Histórico
+    pdf.setTextColor(...primary);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(13);
     pdf.text("Histórico de cuidados", margin, cursorY);
-    cursorY += 8;
+    cursorY += 9;
 
     if (!records.length) {
         pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(...slate);
+        pdf.setTextColor(...text);
         pdf.setFontSize(10);
         pdf.text("Nenhum registro de cuidado cadastrado.", margin, cursorY + 3);
     }
@@ -925,35 +955,38 @@ function exportPdf(pet, records) {
         if (record.nextDate) {
             details.push(`Próximo lembrete: ${formatDate(record.nextDate, { day: "numeric", month: "long", year: "numeric" })}`);
         }
-        const detailLines = pdf.splitTextToSize(details.join("  |  "), contentWidth - 10);
-        const blockHeight = 15 + detailLines.length * 5;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        const detailLines = pdf.splitTextToSize(details.join("  |  "), textWidth);
+        const blockHeight = 15 + detailLines.length * 4.5;
         if (cursorY + blockHeight > 278) {
             pdf.addPage();
             cursorY = 20;
         }
 
-        pdf.setDrawColor(...sage);
-        pdf.setFillColor(255, 253, 248);
-        pdf.roundedRect(margin, cursorY, contentWidth, blockHeight, 1.5, 1.5, "FD");
-        pdf.setTextColor(...navy);
+        pdf.setDrawColor(...secondary);
+        pdf.setFillColor(255, 255, 255);
+        pdf.roundedRect(margin, cursorY, contentWidth, blockHeight, 2, 2, "FD");
+        pdf.setTextColor(...primary);
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(10);
-        pdf.text(record.type, margin + 5, cursorY + 6);
-        pdf.setTextColor(...slate);
+        pdf.text(record.type, margin + padding, cursorY + 6);
+        pdf.setTextColor(...text);
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(8);
-        pdf.text(formatDate(record.date, { day: "numeric", month: "short", year: "numeric" }), pageWidth - margin - 5, cursorY + 6, { align: "right" });
+        pdf.text(formatDate(record.date, { day: "numeric", month: "short", year: "numeric" }), pageWidth - margin - padding, cursorY + 6, { align: "right" });
         pdf.setFontSize(9);
-        pdf.text(detailLines, margin + 5, cursorY + 12);
+        pdf.text(detailLines, margin + padding, cursorY + 12);
         cursorY += blockHeight + 3;
     });
 
     const pageCount = pdf.getNumberOfPages();
     for (let page = 1; page <= pageCount; page += 1) {
         pdf.setPage(page);
-        pdf.setDrawColor(...sage);
+        pdf.setDrawColor(...secondary);
         pdf.line(margin, 286, pageWidth - margin, 286);
-        pdf.setTextColor(...slate);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(...text);
         pdf.setFontSize(8);
         pdf.text("Augenda  |  Registro para acompanhamento profissional", margin, 291);
         pdf.text(`${page} / ${pageCount}`, pageWidth - margin, 291, { align: "right" });
@@ -1005,8 +1038,9 @@ async function exportData() {
         return;
     }
 
-    const headings = ["Animal", "Espécie", "Raça", "Tipo de cuidado", "Data", "Peso (kg)", "BCS", "MCS", "Duração (min)", "Detalhes", "Quando percebido", "Tipo de observação", "Próximo lembrete"];
-    const rows = records.map(record => [pet.name, pet.species, pet.breed, record.type, record.date, record.weight, record.bcs, record.mcs, record.duration, record.description, record.observedAt, record.observationKind, record.nextDate]);
+    const age = pet.birthDate ? formatAge(pet.birthDate) : "";
+    const headings = ["Animal", "Espécie", "Raça", "Idade", "Data de nascimento", "Tipo de cuidado", "Data", "Peso (kg)", "BCS", "MCS", "Duração (min)", "Detalhes", "Quando percebido", "Tipo de observação", "Próximo lembrete"];
+    const rows = records.map(record => [pet.name, pet.species, pet.breed, age, pet.birthDate, record.type, record.date, record.weight, record.bcs, record.mcs, record.duration, record.description, record.observedAt, record.observationKind, record.nextDate]);
     const contents = `\uFEFF${[headings, ...rows].map(row => row.map(csvValue).join(",")).join("\r\n")}`;
 
     const blob = new Blob([contents], { type: "text/csv;charset=utf-8" });
@@ -1271,7 +1305,7 @@ window.addEventListener("beforeunload", event => {
 });
 
 if (!window.db) {
-    showLoading("Não foi possível iniciar a conexão com o banco de dados. Verifique SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no arquivo .env e reinicie o servidor.", true);
+    showLoading(window.dbErro || "Não foi possível iniciar a conexão com o banco de dados. Verifique SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no arquivo .env e reinicie o servidor.", true);
 } else {
     db.aoMudarSessao((event, session) => {
         if (event === "PASSWORD_RECOVERY") {
