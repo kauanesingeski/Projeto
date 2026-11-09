@@ -405,3 +405,27 @@ body { color: var(--text); background: var(--background); }
 .modal input, .modal select, .modal textarea { border-color: var(--secondary); color: var(--text); background: var(--white); }
 .modal-actions { border-color: var(--secondary); }
 .form-feedback { color: var(--text); }
+
+/* ---------- Login e sincronização (Supabase) ---------- */
+.auth-screen { display: grid; min-height: 100vh; place-items: center; padding: 24px 16px; background: var(--background); }
+.auth-card { display: grid; width: min(400px, 100%); gap: 18px; padding: 32px 28px; border: 1px solid var(--secondary); border-radius: 10px; background: var(--white); box-shadow: 0 18px 50px #51434322; }
+.auth-logo { width: 150px; max-width: 60%; justify-self: center; }
+.auth-form { display: grid; gap: 14px; }
+.auth-form > div { display: grid; gap: 14px; }
+.auth-form h1 { margin: 0; color: var(--text); font: 700 22px "Manrope", sans-serif; }
+.auth-subtitle { margin: -6px 0 2px; color: var(--text); font-size: 12px; line-height: 1.5; opacity: .85; }
+.auth-form input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--secondary); border-radius: 5px; color: var(--text); background: var(--white); font-size: 13px; }
+.auth-form .form-feedback { color: #a1473b; }
+.auth-form .form-feedback.is-success { color: #3f7a55; }
+.auth-submit { width: 100%; min-height: 42px; }
+.auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.auth-links .text-button { white-space: normal; text-align: left; font-size: 11px; }
+.auth-loading { display: grid; justify-items: center; gap: 12px; padding: 12px 0; color: var(--text); font-size: 13px; text-align: center; }
+.auth-loading p { margin: 0; }
+.auth-spinner { width: 28px; height: 28px; border: 3px solid var(--surface); border-top-color: var(--primary); border-radius: 50%; animation: auth-giro .8s linear infinite; }
+@keyframes auth-giro { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .auth-spinner { animation-duration: 2.4s; } }
+
+.privacy-note.is-saving > span:first-child { color: #f2c46d; }
+.privacy-note.is-offline > span:first-child { color: #e98b7c; }
+.sync-toast { position: fixed; z-index: 50; left: 50%; bottom: 20px; max-width: min(460px, calc(100% - 32px)); padding: 12px 16px; border-radius: 8px; color: var(--white); background: var(--text); box-shadow: 0 10px 30px #51434355; font-size: 12px; line-height: 1.45; transform: translateX(-50%); }

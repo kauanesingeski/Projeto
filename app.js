@@ -1,186 +1,47 @@
-
 const express = require("express");
+const compression = require("compression");
 const path = require("path");
-const { Pool } = require("pg");
 require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const pool = new Pool({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT || 5432),
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
-});
+// A chave publishable foi feita para ir ao navegador; a proteção dos dados é o RLS do Supabase.
+const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "");
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
 
-app.use(express.json());
-app.use(express.static("public"));
-app.use("/vendor/jspdf", express.static(path.join(__dirname, "node_modules", "jspdf", "dist")));
-
-// Listar animais
-app.get("/api/animais", async (req, res) => {
-    try {
-        const resultado = await pool.query(
-            "SELECT * FROM animais ORDER BY id DESC"
-        );
-
-        res.json(resultado.rows);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ erro: "Erro ao listar animais." });
-    }
-});
-
-// Cadastrar animal
-app.post("/api/animais", async (req, res) => {
-    const { nome, especie, raca, data_nascimento, peso } = req.body;
-
-    if (
-        typeof nome !== "string" || !nome.trim() ||
-        !["Cão", "Gato", "Outro"].includes(especie)
-    ) {
-        return res.status(400).json({
-            erro: "Informe um nome e uma espécie válida."
-        });
-    }
-
-    const pesoInformado = peso === "" || peso == null
-        ? null
-        : Number(peso);
-
-    if (
-        pesoInformado !== null &&
-        (!Number.isFinite(pesoInformado) || pesoInformado <= 0)
-    ) {
-        return res.status(400).json({
-            erro: "O peso deve ser maior que zero."
-        });
-    }
-
-    try {
-        const resultado = await pool.query(
-            `INSERT INTO animais
-             (nome, especie, raca, data_nascimento, peso)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING *`,
-            [
-                nome.trim(),
-                especie,
-                raca?.trim() || null,
-                data_nascimento || null,
-                pesoInformado
-            ]
-        );
-
-        res.status(201).json(resultado.rows[0]);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ erro: "Erro ao cadastrar animal." });
-    }
-});
-
-// Editar animal
-app.put("/api/animais/:id", async (req, res) => {
-    const { nome, especie, raca, data_nascimento, peso } = req.body;
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({ erro: "ID inválido." });
-    }
-
-    if (
-        typeof nome !== "string" || !nome.trim() ||
-        !["Cão", "Gato", "Outro"].includes(especie)
-    ) {
-        return res.status(400).json({
-            erro: "Informe um nome e uma espécie válida."
-        });
-    }
-
-    const pesoInformado = peso === "" || peso == null
-        ? null
-        : Number(peso);
-
-    if (
-        pesoInformado !== null &&
-        (!Number.isFinite(pesoInformado) || pesoInformado <= 0)
-    ) {
-        return res.status(400).json({
-            erro: "O peso deve ser maior que zero."
-        });
-    }
-
-    try {
-        const resultado = await pool.query(
-            `UPDATE animais
-             SET nome = $1, especie = $2, raca = $3,
-                 data_nascimento = $4, peso = $5
-             WHERE id = $6
-             RETURNING *`,
-            [
-                nome.trim(),
-                especie,
-                raca?.trim() || null,
-                data_nascimento || null,
-                pesoInformado,
-                id
-            ]
-        );
-
-        if (resultado.rowCount === 0) {
-            return res.status(404).json({
-                erro: "Animal não encontrado."
-            });
-        }
-
-        res.json(resultado.rows[0]);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ erro: "Erro ao editar animal." });
-    }
-});
-
-// Excluir animal
-app.delete("/api/animais/:id", async (req, res) => {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({ erro: "ID inválido." });
-    }
-
-    try {
-        const resultado = await pool.query(
-            "DELETE FROM animais WHERE id = $1",
-            [id]
-        );
-
-        if (resultado.rowCount === 0) {
-            return res.status(404).json({
-                erro: "Animal não encontrado."
-            });
-        }
-
-        res.status(204).end();
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ erro: "Erro ao excluir animal." });
-    }
-});
-
-// Verificar a conexão e iniciar o servidor
-async function iniciar() {
-    try {
-        await pool.query("SELECT 1");
-
-        app.listen(PORT, () => {
-            console.log(`Site disponível em http://localhost:${PORT}`);
-        });
-    } catch (erro) {
-        console.error("Não foi possível conectar ao PostgreSQL:", erro.message);
-        process.exit(1);
-    }
+if (!supabaseUrl || !supabaseKey) {
+    console.error("Defina SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no arquivo .env.");
 }
 
-iniciar();
+app.disable("x-powered-by");
+app.use(compression());
+
+// Configuração pública lida pelo navegador antes de criar o cliente do Supabase
+app.get("/config.js", (req, res) => {
+    res.type("application/javascript");
+    res.set("Cache-Control", "no-cache");
+    res.send(`window.AUGENDA_CONFIG = ${JSON.stringify({ supabaseUrl, supabaseKey })};`);
+});
+
+// Bibliotecas de terceiros: versão fixa no package-lock, podem ficar em cache por mais tempo
+const vendorCache = { maxAge: "7d" };
+app.use("/vendor/jspdf", express.static(path.join(__dirname, "node_modules", "jspdf", "dist"), vendorCache));
+app.use("/vendor/supabase", express.static(path.join(__dirname, "node_modules", "@supabase", "supabase-js", "dist", "umd"), vendorCache));
+
+// Arquivos do site: o navegador revalida HTML/JS/CSS a cada visita (respostas 304 são baratas)
+app.use(express.static(path.join(__dirname, "public"), {
+    setHeaders(res, filePath) {
+        res.set("Cache-Control", /\.(png|jpe?g|webp|svg|ico)$/i.test(filePath)
+            ? "public, max-age=86400"
+            : "no-cache");
+    }
+}));
+
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Site disponível em http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;

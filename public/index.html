@@ -10,11 +10,34 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <script src="/vendor/jspdf/jspdf.umd.min.js" defer></script>
+    <script src="/vendor/supabase/supabase.js" defer></script>
+    <script src="/config.js" defer></script>
+    <script src="db.js" defer></script>
     <script src="script.js" defer></script>
 </head>
 <body>
-    <div class="app-shell">
+    <main class="auth-screen" id="tela-login">
+        <section class="auth-card" aria-labelledby="titulo-login">
+            <img class="auth-logo" src="/logo.png" alt="Augenda">
+            <div id="auth-carregando" class="auth-loading" role="status"><span class="auth-spinner" aria-hidden="true"></span><p id="auth-carregando-texto">Carregando…</p><button class="button button-outline" id="btn-tentar-novamente" type="button" hidden>Tentar novamente</button></div>
+            <form id="form-login" class="auth-form" hidden novalidate>
+                <h1 id="titulo-login">Entrar</h1>
+                <p class="auth-subtitle" id="subtitulo-login">Acesse os registros de saúde dos seus pets em qualquer dispositivo.</p>
+                <div id="campo-email"><label class="field-label" for="login-email">E-mail</label>
+                <input id="login-email" name="email" type="email" autocomplete="email" required></div>
+                <div id="campo-senha"><label class="field-label" for="login-senha">Senha</label>
+                <input id="login-senha" name="password" type="password" autocomplete="current-password" minlength="6" required></div>
+                <p class="form-feedback" id="mensagem-login" role="status"></p>
+                <button class="button button-primary auth-submit" id="btn-login" type="submit">Entrar</button>
+                <div class="auth-links" id="links-login">
+                    <button class="text-button" id="btn-alternar-cadastro" type="button">Ainda não tem conta? Criar conta</button>
+                    <button class="text-button" id="btn-esqueci-senha" type="button">Esqueci minha senha</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    <div class="sync-toast" id="aviso-sincronizacao" role="alert" hidden></div>
+    <div class="app-shell" hidden>
         <aside class="sidebar">
             <a class="brand" href="#inicio" aria-label="Augenda, início"><img src="/logo.png" alt="Augenda"></a>
             <p class="nav-caption">MENU</p>
@@ -24,13 +47,13 @@
                 <button class="nav-link" type="button" data-view="history"><span class="nav-icon">↻</span> Histórico</button>
                 <button class="nav-link" type="button" data-view="profile"><span class="nav-icon">♡</span> Meu pet</button>
             </nav>
-            <div class="sidebar-bottom"><div class="privacy-note"><span>●</span><span>Seus registros ficam salvos neste dispositivo.</span></div><button class="user-chip" id="btn-editar-usuario" type="button" aria-label="Editar perfil da tutora"><span class="user-avatar"><span id="tutora-iniciais">J</span><img id="tutora-foto" alt="" hidden></span><span class="user-details"><strong id="tutora-nome">Júlia Martins</strong><small>Tutora</small></span><span class="user-more" aria-hidden="true">✎</span></button></div>
+            <div class="sidebar-bottom"><div class="privacy-note" id="status-sincronizacao"><span>●</span><span id="status-sincronizacao-texto">Sincronizado com sua conta.</span></div><button class="user-chip" id="btn-editar-usuario" type="button" aria-label="Editar perfil da tutora"><span class="user-avatar"><span id="tutora-iniciais">J</span><img id="tutora-foto" alt="" hidden></span><span class="user-details"><strong id="tutora-nome">Júlia Martins</strong><small>Tutora</small></span><span class="user-more" aria-hidden="true">✎</span></button></div>
         </aside>
 
         <main class="workspace" id="inicio">
             <header class="topbar"><div class="breadcrumb">Espaço da família <span>/</span> <strong id="breadcrumb-pet">Luna</strong></div><div class="top-actions">
                 <label class="sr-only" for="formato-exportacao">Formato da exportação</label><select id="formato-exportacao" class="export-format"><option value="pdf">PDF</option><option value="csv">CSV</option></select>
-                <button class="button button-outline" id="btn-exportar" type="button"><span>↓</span> Exportar dados</button><button class="button button-primary" id="btn-adicionar" type="button"><span>＋</span> Novo registro</button>
+                <button class="button button-outline" id="btn-exportar" type="button"><span>↓</span> Exportar dados</button><button class="button button-primary" id="btn-adicionar" type="button"><span>＋</span> Novo registro</button><button class="button button-outline" id="btn-sair" type="button" title="Sair da conta"><span>⎋</span> Sair</button>
             </div></header>
 
             <div class="page-content">
